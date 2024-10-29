@@ -1,0 +1,45 @@
+const path = require('path');
+const fs = require('fs');
+const solc = require('solc');
+
+const tSalPath = path.resolve(__dirname, 'contracts', 'TicketSale.sol');
+const source = fs.readFileSync('./contracts/TicketSale.sol', 'utf8');
+
+let input = {
+  language: "Solidity",
+  sources: {
+	"TicketSale.sol": {
+  	content: source,
+	},
+  },
+  settings: {
+	outputSelection: {
+  	"*": {
+    	"*": ["abi", "evm.bytecode"],
+  	},
+	},
+  },
+};
+
+const stringInput=JSON.stringify(input);
+
+const compiledCode=solc.compile(stringInput);
+
+const output =JSON.parse(compiledCode);
+
+
+const contractOutput=output.contracts;
+
+const tSalOutput=contractOutput["TicketSale.sol"];
+
+
+const tSalABI=tSalOutput.TicketSale.abi;
+
+
+const tSalBytecode=tSalOutput.TicketSale.evm.bytecode.object;
+
+module.exports= {"abi":tSalABI,"bytecode":tSalBytecode};
+
+fs.writeFileSync('TicketSaleABI.txt', JSON.stringify(tSalABI, null, 2), 'utf8');
+
+fs.writeFileSync('TicketSaleBytecode.txt', tSalBytecode, 'utf8');
