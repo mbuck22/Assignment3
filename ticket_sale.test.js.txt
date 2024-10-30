@@ -1,0 +1,84 @@
+const assert = require('assert');
+const ganache = require('ganache-cli');
+const Web3 = require('web3');
+const web3 = new Web3(ganache.provider());
+const { abi, bytecode } = require('../compile');
+
+let accounts;
+let ticketSale;
+const price = 1;
+const numTickets = 10;
+
+beforeEach(async () => {
+    	accounts = await web3.eth.getAccounts();
+    	ticketSale = await new web3.eth.Contract(abi)
+        	.deploy({
+            	data: bytecode,
+            	arguments: [numTickets, price]
+        	})
+        	.send({ from: accounts[0], gasPrice: '8000000000', gas: '5000000' });
+});
+
+describe("TicketSale Contract", () => {
+
+	it('deploys a contract', () => {
+    	assert.ok(ticketSale.options.address);
+	});
+
+	it('allows a user to buy a ticket', async () => {
+    	await ticketSale.methods.buyTicket(1).send({
+        	from: accounts[1],
+        	value: price
+    	});
+    	const owner = await ticketSale.methods.ticketOwners(1).call();
+    	assert.equal(accounts[1], owner);
+	});
+
+	it('prevents double purchase of the same ticket', async () => {
+    	await ticketSale.methods.buyTicket(2).send({
+        	from: accounts[1],
+        	value: price
+    	});
+    	try {
+        	await ticketSale.methods.buyTicket(2).send({
+            	from: accounts[2],
+            	value: price
+        	});
+        	assert(false);
+    	} catch (err) {
+        	assert(err);
+    	}
+	});
+
+	it('allows users to offer and accept swaps', async () => {
+    	await ticketSale.methods.buyTicket(3).send({
+        	from: accounts[1],
+        	value: price
+    	});
+    	await ticketSale.methods.buyTicket(4).send({
+        	from: accounts[2],
+        	value: price
+    	});
+    	await ticketSale.methods.offerSwap(3).send({ from: accounts[1] });
+    	await ticketSale.methods.acceptSwap(3).send({ from: accounts[2] });
+    	const newOwnerTicket3 = await ticketSale.methods.ticketOwners(3).call();
+    	const newOwnerTicket4 = await ticketSale.methods.ticketOwners(4).call();
+    	assert.equal(newOwnerTicket3, accounts[2]);
+    	assert.equal(newOwnerTicket4, accounts[1]);
+	});
+
+	it('handles ticket resale correctly', async () => {
+    	await ticketSale.methods.buyTicket(5).send({
+        	from: accounts[1],
+        	value: price
+    	});   	 
+    	const resalePrice = web3.utils.toWei('0.005', 'ether');
+    	await ticketSale.methods.resaleTicket(resalePrice).send({ from: accounts[1] });
+    	await ticketSale.methods.acceptResale(5).send({
+        	from: accounts[2],
+        	value: resalePrice
+    	});
+    	const newOwner = await ticketSale.methods.ticketOwners(5).call();
+    	assert.equal(newOwner, accounts[2]);
+	});
+});
